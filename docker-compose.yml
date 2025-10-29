@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with PostGIS
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: lri-postgres
+    environment:
+      POSTGRES_DB: lri_db
+      POSTGRES_USER: lri_user
+      POSTGRES_PASSWORD: lri_pass_123
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - lri-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lri_user -d lri_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Celery
+  redis:
+    image: redis:7-alpine
+    container_name: lri-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - lri-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO (S3-compatible storage)
+  minio:
+    image: minio/minio:latest
+    container_name: lri-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: lri_admin
+      MINIO_ROOT_PASSWORD: lri_admin_pass_123
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - lri-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lri-backend
+    environment:
+      DATABASE_URL: postgresql://lri_user:lri_pass_123@postgres:5432/lri_db
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: lri_admin
+      MINIO_SECRET_KEY: lri_admin_pass_123
+      ENVIRONMENT: development
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - lri-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lri-celery-worker
+    environment:
+      DATABASE_URL: postgresql://lri_user:lri_pass_123@postgres:5432/lri_db
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: lri_admin
+      MINIO_SECRET_KEY: lri_admin_pass_123
+      ENVIRONMENT: development
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - lri-network
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: lri-frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - lri-network
+    command: npm start
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  lri-network:
+    driver: bridge
