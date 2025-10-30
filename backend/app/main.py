@@ -18,9 +18,13 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting Location Risk Intelligence Platform...")
     
-    # Create database tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Create database tables (skip if DB not available)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        print("✅ Database initialized")
+    except Exception as e:
+        print(f"⚠️ Database not available (running without DB): {e}")
     
     print("✅ Database initialized")
     print(f"📡 API available at: {settings.API_V1_STR}")
