@@ -18,6 +18,8 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:8000",
         "http://127.0.0.1:3000",
+        "https://frolicking-pony-3e3f36.netlify.app",
+        "https://*.netlify.app",
     ]
     
     # Database
