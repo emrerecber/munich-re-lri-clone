@@ -13,14 +13,8 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
     
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:3000",
-        "https://frolicking-pony-3e3f36.netlify.app",
-        "https://*.netlify.app",
-    ]
+    # CORS - Allow all origins for development
+    BACKEND_CORS_ORIGINS: List[str] = ["*"]
     
     # Database
     DATABASE_URL: str = "postgresql://lri_user:lri_pass_123@localhost:5432/lri_db"
